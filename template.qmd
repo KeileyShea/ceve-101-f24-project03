@@ -1,7 +1,7 @@
 ---
 title: "CEVE 101: Project 03"
 author: "Keiley Shea  (KS228)"
-date: "2024-10-23"
+date: "2024-11-23"
 
 # do not change anything below this line
 engine: julia
@@ -26,7 +26,7 @@ using RainwaterHarvesting         # <2>
 Next, we specify the path to the rainfall data file and read it in.
 
 ```{julia}
-filepath = "data/120.txt" # <1>   
+filepath = "data/2.txt" # <1>   
 rainfall_data = RainfallData(filepath) # <2>
 ```
 
@@ -50,48 +50,13 @@ plot(rainfall_data) # <1>
 
 ### Discussion
 
-*Insert discussion here*
+*This model does not have any missing years in data. Due to this, I find that it is sufficient to make meaningful risk assessments. Without any missing years, the 
+data is as accurate as possible.
+Additionally, since my data has no missing years, the years of drought, like 2012-2017, are included in my data. This is vital to make my data accurate, since a 
+lack of data during years of drought would scew the data and make it insufficient to make a meaningful risk assessment. In order to create a rainwater harvesting 
+system that will work in a drought, data from times of drought is neccessary.*
 
 ## Understanding the Theoretical Model
-
-Let's explore the model that simulates the rainwater harvesting system.
-
-### Mass Balance Equation
-
-The mass balance model for the rainwater tank is given by:
-
-$$
-V_{t+1} = V_t + Q_t - C_t | 0 \leq V_t \leq V_\text{max}
-$$
-
-- $V_t$: the volume of water in the tank at time $t$
-- $Q_t$ is the volume of water added to the tank at time $t$
-- $C_t$ is the volume of water consumed at time $t$
-- $V_\text{max}$: the maximum volume of the tank
-
-### Inflow ($Q_t$)
-
-Inflow is calculated as
-
-$$
-Q_t = \eta \times A \times \max(P_t - F, 0).
-$$
-
-- $\eta$: the runoff coefficient, which accounts for losses due to evaporation, spilling, etc.
-- $A$: the area of the roof (we will use square meters)
-- $P_t$: the precipitation at time $t$ (we will use millimeters per day)
-- $F$: the first flush volume (we will use millimeters). The first flush volume is often discarded, so that each time it rains the first bit of water (which is usually dirty) is not used (see [here](https://rainwaterharvesting.tamu.edu/pre-storage-treatment/) for more details).
-
-### Consumption
-
-Consumption is modeled as:
-
-$$
-C_t = \begin{cases}
-    74.1 & \quad \text{day of year} > 150 \\
-    0 & \quad \text{day of year} \leq 150
-\end{cases}
-$$
 
 This makes two major assumptiuons.
 First, the household begins using water from the tank after the 150th day of the year.
@@ -99,20 +64,31 @@ This is based on the idea that the rainy season lasts for about the first 150 da
 The second assumption is that each household consumes 74.1 liters per day during the dry season.
 How does this compare to your household's water usage?
 
+The main limitations of these assumptions is that they take the average length of the wet season. However, during a drought, when the rainwater harvesting system 
+will be most needed, the wet season will likely be shorter than 150 days. It is important to for the assumption to take drought conditions into consideration 
+rather than simply the average lenght of the wet season. With the second assumption, this number is much lower than what my calculated water use is per day. 
+Therefore it is limited because larger families can easily go above that amount. Even while trying to conserve as much water as possible during the dry season, 
+74.1 is a very small amount of water to assume a large household will consume. The calculated daily water usage for myself was about 250 liters, much more than 
+the 74.1 liter limitation. 
+
+To relax these assumptions, I'd make my assumption of the wet season length closer to the lower quartile of the data in order to prepare the system for the case 
+of a drought. This would involve laying out the data by length of wet season and dividing it into 4 parts. The 25% average will be the lower quartile, and I would 
+make my assumption for the length of the dry season based off of that. Additionally, I would take the average household water consumption for the average sized 
+household in the area. Since the assumption seems to be a low amount of water consumption, I'd raise the assumption to match the average amount of water consumed 
+daily by the average sized household. 
+
 ## Model Implementation and Testing
 
 ### Defining the Model Parameters
 
-We can define the model parameters with sensible default values.
-You will have the opportunity to change these values later.
 
 ```{julia}
 #| output: false
 param = ModelParameters(          # <1>
     runoff_coefficient=0.85,      # <2>
-    roof_area_m2=45.0,            # <3>
+    roof_area_m2=55.0,            # <3>
     first_flush_mm=2.0,           # <4>
-    tank_capacity_L=16000.0       # <5>
+    tank_capacity_L=19000.0       # <5>
 )
 ```
 
@@ -143,13 +119,23 @@ p2 = plot(rainfall_1981)
 plot(p2, p1, layout=(2, 1), size=(1000, 700), link=:x)
 ```
 
-Observe how the tank's water level responds to rainfall events.
-Note any periods when the tank runs dry or overflows.
+
+The tank appears to overflow at the end of the peak rain season and stay at an overflowed level well into the dry season in the intital perameters of the model. 
+The tank runs empty at the beginning of the model, but that can be attributed to the fact that it started out at 0 and it had not yet rained significantly in the 
+region. 
+
+The parameters that I adjusted were the roof area and the tank capacity. I increased the roof area because it is a feasible way to increase the amount of rain 
+that is collected in the system. I increased the tank capacity because it will need to handle the larger load that comes with a larger roof. In addition, a larger 
+tank capacity will decrease the amount of water that overflows out of the tank during the end of the wet season. 
+
+When running the simulation, it can be seen that the tank still overflows at the end of the wet season, however it overflows for a shorter amount of time, meaning 
+that it is closer to the proper ideal size to not lose any water but still be realistically sized. During the wet season, there are other sources of water, 
+therefore the increased volume increases the leftover water at the end of the dry season in comparison to the original model. The increased roof size increases 
+the speed at which water is collected in the tank, having it reach the maximum capacity of the original model (16,000) earlier than with the original roof size. 
 
 ### Reliability Analysis
 
-We can run simulations for all years, one at a time, and then check how many times the tank runs dry.
-You can run simulations for all years at once with the following code:
+
 
 ```{julia}
 all_years = sort(collect(keys(rainfall_data.annual_data)))          # <1>
@@ -158,7 +144,13 @@ any_failures = [!isempty(result.failure_dates) for result in all_results]  # <3>
 println("Number of years with failures: ", sum(any_failures), " out of ", length(all_years))  # <4>
 ```
 
-1. We get all the years in order.
-2. We run the simulation for each year.
-3. We check if any failures occurred.
-4. We print the number of years with failures and the total number of years.
+It can be seen that the model only fails the reliability analysis 1 year out of the 50 years of data provided. This is a decrease from the original model that
+failed 3 out of the 50 years. Due to this, the system is reliable 98% of the time according to the reliability test. This includes the years that there were 
+droughts through the 2010s (2012-2017). Since the model was able to only fail one year when there were multiple years of harsh drought, the new system will likely 
+perform well to provide water to the household. 
+
+Some limitations in model still remain. For instance, the model does not take into consideration what would happen if the tank were the break or need maintenence. 
+This would require for the tank to potential drain itself due to damage or to be drained in order to conduct repairs. This gap in the data can be addressed by 
+adding an analysis of how often the collection system either needs to be repaired or fails. With this data, we can analyze the affects of the maintenence/failure 
+on the model to get a more accurate reliability analysis. With the possibility of maintenence and failures accounted for, the model will be more accurate because 
+it will have have calculated for the tank possibly being drained of water. 
